@@ -158,7 +158,9 @@ bool Scheduler::isVsyncValid(nsecs_t expectedVsyncTimestamp, uid_t uid) const {
         return true;
     }
 
-    return mVsyncSchedule->getTracker().isVSyncInPhase(expectedVsyncTimestamp, *frameRate);
+    //return mVsyncSchedule->getTracker().isVSyncInPhase(expectedVsyncTimestamp, *frameRate);
+    mVsyncSchedule->getTracker().isVSyncInPhase(expectedVsyncTimestamp, *frameRate);
+    return true;
 }
 
 impl::EventThread::ThrottleVsyncCallback Scheduler::makeThrottleVsyncCallback() const {
@@ -519,7 +521,7 @@ void Scheduler::registerLayer(Layer* layer) {
         voteType = scheduler::LayerHistory::LayerVoteType::Max;
     } else if (windowType == WindowType::WALLPAPER) {
         // Running Wallpaper at Min is considered as part of content detection.
-        voteType = scheduler::LayerHistory::LayerVoteType::Min;
+        voteType = scheduler::LayerHistory::LayerVoteType::NoVote;
     } else {
         voteType = scheduler::LayerHistory::LayerVoteType::Heuristic;
     }
@@ -736,6 +738,7 @@ auto Scheduler::chooseDisplayMode() -> std::pair<DisplayModePtr, GlobalSignals> 
     if (mPolicy.displayPowerMode == hal::PowerMode::DOZE ||
         mPolicy.displayPowerMode == hal::PowerMode::DOZE_SUSPEND) {
         constexpr GlobalSignals kNoSignals;
+        ALOGI("Doze, refresh rate = min");
         return {configs->getMinRefreshRate(), kNoSignals};
     }
 
