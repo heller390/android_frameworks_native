@@ -158,7 +158,9 @@ bool Scheduler::isVsyncValid(nsecs_t expectedVsyncTimestamp, uid_t uid) const {
         return true;
     }
 
-    return mVsyncSchedule->getTracker().isVSyncInPhase(expectedVsyncTimestamp, *frameRate);
+    //return mVsyncSchedule->getTracker().isVSyncInPhase(expectedVsyncTimestamp, *frameRate);
+    mVsyncSchedule->getTracker().isVSyncInPhase(expectedVsyncTimestamp, *frameRate);
+    return true;
 }
 
 impl::EventThread::ThrottleVsyncCallback Scheduler::makeThrottleVsyncCallback() const {
@@ -519,7 +521,7 @@ void Scheduler::registerLayer(Layer* layer) {
         voteType = scheduler::LayerHistory::LayerVoteType::Max;
     } else if (windowType == WindowType::WALLPAPER) {
         // Running Wallpaper at Min is considered as part of content detection.
-        voteType = scheduler::LayerHistory::LayerVoteType::Min;
+        voteType = scheduler::LayerHistory::LayerVoteType::NoVote;
     } else {
         voteType = scheduler::LayerHistory::LayerVoteType::Heuristic;
     }
@@ -725,10 +727,19 @@ auto Scheduler::chooseDisplayMode() -> std::pair<DisplayModePtr, GlobalSignals> 
     // If Display Power is not in normal operation we want to be in performance mode. When coming
     // back to normal mode, a grace period is given with DisplayPowerTimer.
     if (mDisplayPowerTimer &&
-        (mPolicy.displayPowerMode != hal::PowerMode::ON ||
+        ((mPolicy.displayPowerMode != hal::PowerMode::ON && 
+          mPolicy.displayPowerMode != hal::PowerMode::DOZE && 
+          mPolicy.displayPowerMode != hal::PowerMode::DOZE_SUSPEND) ||
          mPolicy.displayPowerTimer == TimerState::Reset)) {
         constexpr GlobalSignals kNoSignals;
         return {configs->getMaxRefreshRateByPolicy(), kNoSignals};
+    }
+
+    if (mPolicy.displayPowerMode == hal::PowerMode::DOZE ||
+        mPolicy.displayPowerMode == hal::PowerMode::DOZE_SUSPEND) {
+        constexpr GlobalSignals kNoSignals;
+        ALOGI("Doze, refresh rate = min");
+        return {configs->getMinRefreshRate(), kNoSignals};
     }
 
     const GlobalSignals signals{.touch = mTouchTimer && mPolicy.touch == TouchState::Active,
@@ -740,9 +751,7 @@ auto Scheduler::chooseDisplayMode() -> std::pair<DisplayModePtr, GlobalSignals> 
 DisplayModePtr Scheduler::getPreferredDisplayMode() {
     std::lock_guard<std::mutex> lock(mPolicyLock);
     // Make sure the stored mode is up to date.
-    if (mPolicy.mode) {
-        mPolicy.mode = chooseDisplayMode().first;
-    }
+    mPolicy.mode = chooseDisplayMode().first;
     return mPolicy.mode;
 }
 
